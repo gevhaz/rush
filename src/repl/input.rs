@@ -35,6 +35,10 @@ fn read_line<W: Write>(engine: &mut Engine<W>) -> Result<String> {
     let mut cancelled = false;
     let mut cleared = false;
 
+    let mut file_index = 0;
+    let mut tab_index_start = 0;
+    let mut tab_index_end = 0;
+
     while !about_to_exit {
         let (code, modifiers) = match event::read()? {
             Event::Key(KeyEvent {
@@ -59,6 +63,37 @@ fn read_line<W: Write>(engine: &mut Engine<W>) -> Result<String> {
                     line = expanded_line;
                 }
                 about_to_exit = true;
+            }
+
+            (KeyCode::Tab, KeyModifiers::NONE) => {
+                if let Some(path) = find_file(&mut file_index)? {
+                    let (mut x, y) = cursor::position()?;
+
+                    if tab_index_end >= line.len() {
+                        line.replace_range(tab_index_start.., &path);
+                    } else {
+                        line.replace_range(tab_index_start..tab_index_end, &path);
+                    }
+
+                    tab_index_start = index;
+                    tab_index_end = index + path.len();
+
+                    if tab_index_end >= line.len() {
+                        index = line.len() - 1;
+                        x += path.len() as u16;
+                    } else {
+                        index += tab_index_end;
+                        x += tab_index_end as u16;
+                    }
+
+                    // if index > x as usize {
+                    //     x += path.len() as u16;
+                    // } else {
+                    //     x -= path.len() as u16;
+                    // }
+
+                    execute!(engine.writer, cursor::MoveTo(x, y))?;
+                }
             }
 
             (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
@@ -287,4 +322,18 @@ fn expand_abbreviation<S: AsRef<str>>(line: S, only_if_equal: bool) -> Option<(S
         }
     }
     None
+}
+
+fn find_file(index: &mut usize) -> Result<Option<String>> {
+    let files = std::fs::read_dir(".")?.count();
+    let entry = std::fs::read_dir(".")?.nth(*index);
+    let entry = entry.map_or(Ok(None), |v| v.map(Some))?;
+
+    if *index > files - 1 {
+        *index = 0;
+    } else {
+        *index += 1;
+    }
+
+    Ok(entry.map(|e| format!("{}", e.path().display())))
 }
