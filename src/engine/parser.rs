@@ -3,6 +3,20 @@ use std::io::Write;
 use crate::path;
 use crate::{Engine, Result};
 
+use super::Command;
+
+pub fn parse_line<W: Write>(
+    engine: &mut Engine<W>,
+    line: impl ToString,
+) -> Result<Option<Command>> {
+    Ok(match Line::parse(engine, line.to_string())? {
+        None => None,
+        Some(input) if engine.has_builtin(&input.cmd) => Some(Command::Builtin(input)),
+        Some(input) if engine.has_command(&input.cmd) => Some(Command::Valid(input)),
+        Some(input) => Some(Command::Invalid(input)),
+    })
+}
+
 pub struct Line {
     pub cmd: String,
     pub raw_args: Vec<String>,
