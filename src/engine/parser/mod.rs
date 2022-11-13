@@ -1,4 +1,9 @@
+mod ast;
+mod lexer;
+
 use std::io::Write;
+
+pub use lexer::{lex, Token};
 
 use crate::path;
 use crate::{Engine, Result};
@@ -34,12 +39,13 @@ impl Line {
         engine.history.append(&line)?;
 
         match line.find(' ') {
-            Some(_) => {
-                let (cmd, args) = line.split_once(' ').unwrap();
+            Some(i) => {
+                let (cmd, args) = line.split_at(i);
                 let args = args
                     .split_ascii_whitespace()
                     .map(|s| s.replace('~', &home))
                     .collect::<Vec<_>>();
+
                 Ok(Some(Self {
                     cmd: cmd.to_string(),
                     raw_args: args,

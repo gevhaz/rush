@@ -21,6 +21,19 @@ pub struct Engine<W: Write> {
     pub history: History,
 }
 
+impl Engine<Vec<u8>> {
+    pub fn in_memory() -> Self {
+        let history = History::init().expect("could not initialize history");
+        Self {
+            writer: Vec::new(),
+            prev_dir: None,
+            commands: path::get_cmds_from_path(),
+            builtins: Self::builtin_names(),
+            history,
+        }
+    }
+}
+
 impl<W: Write> Engine<W> {
     pub fn has_builtin(&self, builtin: impl AsRef<str>) -> bool {
         self.builtins.iter().any(|&b| b == builtin.as_ref())
@@ -92,7 +105,7 @@ impl ExitStatus {
 
 fn execute_command(input: Line) -> Result<ExitStatus> {
     let child = process::Command::new(&input.cmd)
-        .args(&input.raw_args)
+        .args(input.raw_args())
         .spawn()?;
     let result = child.wait_with_output()?;
 

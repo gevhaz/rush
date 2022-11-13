@@ -18,7 +18,7 @@ pub fn input<W: Write>(engine: &mut Engine<W>) -> Result<Option<Command>> {
     parse_line(engine, line)
 }
 
-fn read_line<W: Write>(engine: &mut Engine<W>) -> Result<String> {
+pub fn read_line<W: Write>(engine: &mut Engine<W>) -> Result<String> {
     let _raw = RawMode::init()?;
 
     let mut line = String::new();
