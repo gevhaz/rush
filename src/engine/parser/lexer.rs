@@ -3,13 +3,12 @@ pub enum Token {
     String(String),
     SingleQuotedString(String),
     DoubleQuotedString(String),
-    Assignment(String, String),
 
-    LParen,
-    RParen,
+    // LParen,
+    // RParen,
 
-    LBrace,
-    RBrace,
+    // LBrace,
+    // RBrace,
 
     RedirectOutput(Option<String>, String),
     RedirectInput(String),
@@ -31,10 +30,10 @@ pub fn lex(input: String) -> Vec<Token> {
     while let Some(ch) = chars.next() {
         match ch {
             ' ' => {}
-            '(' => tokens.push(Token::LParen),
-            ')' => tokens.push(Token::RParen),
-            '{' => tokens.push(Token::LBrace),
-            '}' => tokens.push(Token::RBrace),
+            // '(' => tokens.push(Token::LParen),
+            // ')' => tokens.push(Token::RParen),
+            // '{' => tokens.push(Token::LBrace),
+            // '}' => tokens.push(Token::RBrace),
 
             '<' => {
                 if let Some(token) = try_lex_redirect_input(&mut chars) {
@@ -183,10 +182,8 @@ fn try_lex_string(
         None => String::new(),
     };
 
-    let mut is_assignment = false;
-
     while let Some(&next) = chars.peek() {
-        if "(){}<> ;|".contains(next) {
+        if "<> ;|".contains(next) {
             break;
         }
 
@@ -194,33 +191,17 @@ fn try_lex_string(
             break;
         }
 
-        if next == '=' {
-            if !is_assignment {
-                is_assignment = true;
-            } else {
-                // FIXME: what to do if multiple =?
-            }
-        }
         s.push(next);
         chars.next();
     }
 
-    if is_assignment {
-        let (dest, mut var) = s.split_once('=').unwrap();
-        if var == "''" || var == r#""""# {
-            var = "";
-        }
-
-        Token::Assignment(dest.into(), var.into())
-    } else {
-        Token::String(s)
-    }
+    Token::String(s)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::Token::*;
+    use super::*;
 
     #[test]
     fn lex_basic() {
@@ -245,7 +226,8 @@ mod tests {
 
         assert_eq!(
             vec![
-                Assignment("FOO".into(), "".into()),
+                // Assignment("FOO".into(), "".into()),
+                String("FOO=".into()),
                 String("ls".into()),
                 DoubleQuotedString("foo".into()),
                 RedirectOutput(Some("2".into()), "/dev/null".into()),
@@ -262,7 +244,8 @@ mod tests {
 
         assert_eq!(
             vec![
-                Assignment("LC_ALL".into(), "en-US".into()),
+                // Assignment("LC_ALL".into(), "en-US".into()),
+                String("LC_ALL=en-US".into()),
                 RedirectOutput(Some("2".into()), "&1".into()),
                 String("ls".into()),
             ],
@@ -368,22 +351,23 @@ mod tests {
         let input = "PATH=\"\" ls".to_string();
         let tokens = lex(input);
         assert_eq!(
-            vec![Assignment("PATH".into(), "".into()), String("ls".into())],
+            // vec![Assignment("PATH".into(), "".into()), String("ls".into())],
+            vec![String("PATH=\"\"".into()), String("ls".into())],
             tokens,
         );
 
-        let input = "PATH='' ls".to_string();
-        let tokens = lex(input);
-        assert_eq!(
-            vec![Assignment("PATH".into(), "".into()), String("ls".into())],
-            tokens,
-        );
+        // let input = "PATH='' ls".to_string();
+        // let tokens = lex(input);
+        // assert_eq!(
+        //     vec![Assignment("PATH".into(), "".into()), String("ls".into())],
+        //     tokens,
+        // );
 
-        let input = "PATH= ls".to_string();
-        let tokens = lex(input);
-        assert_eq!(
-            vec![Assignment("PATH".into(), "".into()), String("ls".into())],
-            tokens,
-        );
+        // let input = "PATH= ls".to_string();
+        // let tokens = lex(input);
+        // assert_eq!(
+        //     vec![Assignment("PATH".into(), "".into()), String("ls".into())],
+        //     tokens,
+        // );
     }
 }
