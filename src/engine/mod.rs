@@ -7,11 +7,15 @@ use std::path::PathBuf;
 use std::process;
 
 use crate::config::ABBREVIATIONS;
+use crate::repl::input::read_line;
 use crate::{path, Result};
 
 pub use self::builtin::Builtins;
 pub use self::history::History;
+pub use self::parser::AST;
 pub use self::parser::Line;
+use self::parser::ast::{CommandType, parse};
+use self::parser::parse_line;
 
 pub struct Engine<W: Write> {
     pub writer: W,
@@ -101,6 +105,29 @@ impl ExitStatus {
     pub fn from(code: i32) -> Self {
         Self { code }
     }
+}
+
+pub fn read_and_execute<W: Write>(engine: &mut Engine<W>) -> Result<()> {
+    let line = read_line(engine)?;
+    let ast = parse(line);
+    walk_ast(engine, ast)
+}
+
+fn walk_ast<W: Write>(engine: &mut Engine<W>, ast: AST) -> Result<()> {
+    for command in ast.commands() {
+        match command {
+            CommandType::Single(cmd) => {
+                writeln!(engine.writer, "got single command: {cmd:#?}")?;
+            }
+            CommandType::Pipeline(pipeline) => {
+                writeln!(engine.writer, "got multiple commands:")?;
+                for cmd in pipeline {
+                    writeln!(engine.writer, "command: {cmd:#?}")?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn execute_command(input: Line) -> Result<ExitStatus> {

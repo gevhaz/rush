@@ -7,6 +7,7 @@ use std::process;
 use crossterm::{execute, style, terminal};
 
 use crate::config::{self, Colors};
+use crate::engine::read_and_execute;
 use crate::path::Expand;
 
 use crate::{Engine, ExitStatus, Result};
@@ -33,29 +34,33 @@ impl Repl {
                 )?;
             }
 
-            match input::input(&mut self.engine) {
-                Ok(Some(command)) => match self.engine.execute(command) {
-                    Ok(status) => {
-                        self.last_status = Some(status);
-                    }
+            if let Err(e) = read_and_execute(&mut self.engine) {
+                eprintln!("rush: Error occurred when reading or executing: {e}");
+            }
 
-                    Err(e) => {
-                        writeln!(
-                            self.engine.writer,
-                            "rush: Error occurred when executing command: {e}"
-                        )?;
-                    }
-                },
+            // match input::input(&mut self.engine) {
+            //     Ok(Some(command)) => match self.engine.execute(command) {
+            //         Ok(status) => {
+            //             self.last_status = Some(status);
+            //         }
 
-                Ok(None) => {}
+            //         Err(e) => {
+            //             writeln!(
+            //                 self.engine.writer,
+            //                 "rush: Error occurred when executing command: {e}"
+            //             )?;
+            //         }
+            //     },
 
-                Err(e) => {
-                    writeln!(
-                        self.engine.writer,
-                        "rush: Error occurred when reading input: {e}"
-                    )?;
-                }
-            };
+            //     Ok(None) => {}
+
+            //     Err(e) => {
+            //         writeln!(
+            //             self.engine.writer,
+            //             "rush: Error occurred when reading input: {e}"
+            //         )?;
+            //     }
+            // };
         }
     }
 

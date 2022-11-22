@@ -1,9 +1,10 @@
-mod ast;
-mod lexer;
+pub mod ast;
+pub mod lexer;
 
 use std::io::Write;
 
 pub use lexer::{lex, Token};
+pub use ast::AST;
 
 use crate::path;
 use crate::{Engine, Result};
