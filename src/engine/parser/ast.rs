@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use crate::engine::parser::Token;
 
 use super::util;
@@ -47,16 +49,20 @@ pub enum Redirect {
 pub enum Expansion {
     Parameter {
         name: String,
-        range: std::ops::RangeInclusive<usize>,
+        range: RangeInclusive<usize>,
     },
     Command {
         ast: AST,
-        range: std::ops::RangeInclusive<usize>,
+        range: RangeInclusive<usize>,
     },
     Glob {
         pattern: String,
         recursive: bool,
-        range: std::ops::RangeInclusive<usize>,
+        range: RangeInclusive<usize>,
+    },
+    Tilde {
+        pattern: String,
+        range: RangeInclusive<usize>,
     },
 }
 
@@ -464,15 +470,11 @@ mod tests {
         let ast = parse(input);
 
         let expected = AST {
-            commands: vec![
-                CommandType::Single(Command {
-                    name: Word::new("echo", vec![]),
-                    prefix: vec![],
-                    suffix: vec![
-                        Meta::Word(Word::new("** $foo", vec![])),
-                    ],
-                }),
-            ],
+            commands: vec![CommandType::Single(Command {
+                name: Word::new("echo", vec![]),
+                prefix: vec![],
+                suffix: vec![Meta::Word(Word::new("** $foo", vec![]))],
+            })],
         };
 
         assert_eq!(expected, ast);
@@ -587,4 +589,68 @@ mod tests {
 
         assert_eq!(expected, ast);
     }
+
+    #[test]
+    fn basic_command_expansion_parsing() {
+        let input = r#"echo "bat: $(cat /sys/class/power_supply/BAT0/capacity)""#.to_string();
+        let ast = parse(input);
+
+        let expected = AST {
+            commands: vec![CommandType::Single(Command {
+                name: Word::new("echo", vec![]),
+                prefix: vec![],
+                suffix: vec![Meta::Word(Word::new(
+                    "bat: $(cat /sys/class/power_supply/BAT0/capacity)",
+                    vec![Expansion::Command {
+                        range: 5..=48,
+                        ast: AST { commands: vec![
+                            CommandType::Single(Command {
+                                name: Word::new("cat", vec![]),
+                                prefix: vec![],
+                                suffix: vec![
+                                    Meta::Word(Word::new("/sys/class/power_supply/BAT0/capacity", vec![])),
+                                ],
+                            }),
+                        ] },
+                    }],
+                ))],
+            })],
+        };
+
+        assert_eq!(expected, ast);
+    }
+
+    // FIXME: this probably requires (major?) changes to the lexing.
+    //        it's making me wonder if the lexing part should be
+    //        removed entirely, since lexing a POSIX shell-ish language
+    //        seems really difficult
+    // #[test]
+    // fn nested_quotes_in_command_expansion_parsing() {
+    //     let input = r#"echo "bat: $(cat "/sys/class/power_supply/BAT0/capacity")""#.to_string();
+    //     let ast = parse(input);
+
+    //     let expected = AST {
+    //         commands: vec![CommandType::Single(Command {
+    //             name: Word::new("echo", vec![]),
+    //             prefix: vec![],
+    //             suffix: vec![Meta::Word(Word::new(
+    //                 "bat: $(cat \"/sys/class/power_supply/BAT0/capacity\")",
+    //                 vec![Expansion::Command {
+    //                     range: 5..=50,
+    //                     ast: AST { commands: vec![
+    //                         CommandType::Single(Command {
+    //                             name: Word::new("cat", vec![]),
+    //                             prefix: vec![],
+    //                             suffix: vec![
+    //                                 Meta::Word(Word::new("/sys/class/power_supply/BAT0/capacity", vec![])),
+    //                             ],
+    //                         }),
+    //                     ] },
+    //                 }],
+    //             ))],
+    //         })],
+    //     };
+
+    //     assert_eq!(expected, ast);
+    // }
 }
