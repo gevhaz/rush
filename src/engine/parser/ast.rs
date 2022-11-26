@@ -156,8 +156,8 @@ fn parse_command(tokens: &[Token]) -> Option<Command> {
     }
 }
 
-fn parse_word(s: impl AsRef<str>, should_expand: bool) -> Word {
-    if !should_expand {
+fn parse_word(s: impl AsRef<str>, expand_variables: bool, expand_globs: bool) -> Word {
+    if !expand_variables && !expand_globs {
         return Word::new(s.as_ref(), Vec::new());
     }
 
@@ -170,7 +170,7 @@ fn parse_word(s: impl AsRef<str>, should_expand: bool) -> Word {
         match ch {
             ' ' => {}
 
-            '$' => match chars.peek() {
+            '$' if expand_variables => match chars.peek() {
                 Some(&c) if util::is_valid_first_character_of_expansion(c) => {
                     let c = chars.next().unwrap();
 
@@ -215,7 +215,7 @@ fn parse_word(s: impl AsRef<str>, should_expand: bool) -> Word {
                 c => panic!("got unexpected: {c:?}"),
             },
 
-            '*' => {
+            '*' if expand_globs => {
                 let mut recursive = false;
                 let mut pattern = '*'.to_string();
                 let start_index = index;
@@ -260,23 +260,23 @@ fn parse_meta(token: &Token) -> Option<Meta> {
         Token::String(s) => {
             let item = match s.split_once('=') {
                 Some((var, val)) => {
-                    let var_word = parse_word(var, true);
-                    let val_word = parse_word(val, true);
+                    let var_word = parse_word(var, false, false);
+                    let val_word = parse_word(val, true, true);
                     Meta::Assignment(var_word, val_word)
                 }
-                None => Meta::Word(parse_word(s, true)),
+                None => Meta::Word(parse_word(s, true, true)),
             };
 
             return Some(item);
         }
 
         Token::SingleQuotedString(s) => {
-            let word = parse_word(s, false);
+            let word = parse_word(s, false, false);
             Some(Meta::Word(word))
         }
 
         Token::DoubleQuotedString(s) => {
-            let word = parse_word(s, true);
+            let word = parse_word(s, true, false);
             Some(Meta::Word(word))
         }
 
