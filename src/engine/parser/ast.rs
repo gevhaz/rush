@@ -422,17 +422,17 @@ mod tests {
         let expected = AST {
             commands: vec![CommandType::Single(Command {
                 name: Word::new("echo", vec![]),
-                prefix: Vec::new(),
+                prefix: vec![],
                 suffix: vec![Meta::Word(Word::new(
                     "**/*.rs",
                     vec![
                         Expansion::Glob {
-                            pattern: "**".to_string(),
+                            pattern: "**".into(),
                             recursive: true,
                             range: 0..=1,
                         },
                         Expansion::Glob {
-                            pattern: "*.rs".to_string(),
+                            pattern: "*.rs".into(),
                             recursive: false,
                             range: 3..=6,
                         },
@@ -452,16 +452,16 @@ mod tests {
             AST {
                 commands: vec![CommandType::Single(Command {
                     name: Word::new("echo", vec![]),
-                    prefix: Vec::new(),
+                    prefix: vec![],
                     suffix: vec![Meta::Word(Word::new(
                         "yo $foo $A",
                         vec![
                             Expansion::Parameter {
-                                name: "foo".to_string(),
+                                name: "foo".into(),
                                 range: 3..=6,
                             },
                             Expansion::Parameter {
-                                name: "A".to_string(),
+                                name: "A".into(),
                                 range: 8..=9,
                             },
                         ],
@@ -497,7 +497,7 @@ mod tests {
             commands: vec![CommandType::Pipeline(vec![
                 Command {
                     name: Word::new("echo", vec![]),
-                    prefix: Vec::new(),
+                    prefix: vec![],
                     suffix: vec![Meta::Word(Word::new(
                         "I \"am\": $(whoami | rev | grep -o -v foo)",
                         vec![Expansion::Command {
@@ -506,17 +506,17 @@ mod tests {
                                 commands: vec![CommandType::Pipeline(vec![
                                     Command {
                                         name: Word::new("whoami", vec![]),
-                                        prefix: Vec::new(),
-                                        suffix: Vec::new(),
+                                        prefix: vec![],
+                                        suffix: vec![],
                                     },
                                     Command {
                                         name: Word::new("rev", vec![]),
-                                        prefix: Vec::new(),
-                                        suffix: Vec::new(),
+                                        prefix: vec![],
+                                        suffix: vec![],
                                     },
                                     Command {
                                         name: Word::new("grep", vec![]),
-                                        prefix: Vec::new(),
+                                        prefix: vec![],
                                         suffix: vec![
                                             Meta::Word(Word::new("-o", vec![])),
                                             Meta::Word(Word::new("-v", vec![])),
@@ -530,8 +530,8 @@ mod tests {
                 },
                 Command {
                     name: Word::new("less", vec![]),
-                    prefix: Vec::new(),
-                    suffix: Vec::new(),
+                    prefix: vec![],
+                    suffix: vec![],
                 },
             ])],
         };
@@ -563,18 +563,18 @@ mod tests {
                                 ast: AST {
                                     commands: vec![CommandType::Single(Command {
                                         name: Word::new("whoami", vec![]),
-                                        prefix: Vec::new(),
-                                        suffix: Vec::new(),
+                                        prefix: vec![],
+                                        suffix: vec![],
                                     })],
                                 },
                             }],
                         )),
-                        Meta::Word(Word::new("~/.cache/", vec![])),
+                        Meta::Word(Word::new("~/.cache/", vec![Expansion::Tilde { index: 0 }])),
                     ],
                 },
                 Command {
                     name: Word::new("xargs", vec![]),
-                    prefix: Vec::new(),
+                    prefix: vec![],
                     suffix: vec![
                         Meta::Word(Word::new("-I", vec![])),
                         Meta::Word(Word::new("{}", vec![])),
@@ -631,7 +631,7 @@ mod tests {
 
     #[test]
     fn tilde_expansion_parsing() {
-        let input = "ls ~ ~/ ~/foo".to_string();
+        let input = "ls ~ ~/ ~/foo foo~ bar/~ ./~ ~% ~baz".to_string();
         let ast = parse(input);
 
         let expected = AST {
@@ -642,20 +642,6 @@ mod tests {
                     Meta::Word(Word::new("~", vec![Expansion::Tilde { index: 0 }])),
                     Meta::Word(Word::new("~/", vec![Expansion::Tilde { index: 0 }])),
                     Meta::Word(Word::new("~/foo", vec![Expansion::Tilde { index: 0 }])),
-                ],
-            })],
-        };
-
-        assert_eq!(expected, ast);
-
-        let input = "ls foo~ bar/~ ./~ ~% ~baz".to_string();
-        let ast = parse(input);
-
-        let expected = AST {
-            commands: vec![CommandType::Single(Command {
-                name: Word::new("ls", vec![]),
-                prefix: vec![],
-                suffix: vec![
                     Meta::Word(Word::new("foo~", vec![])),
                     Meta::Word(Word::new("bar/~", vec![])),
                     Meta::Word(Word::new("./~", vec![])),
