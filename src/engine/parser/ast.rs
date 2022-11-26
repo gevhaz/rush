@@ -1,5 +1,7 @@
 use crate::engine::parser::Token;
 
+use super::util;
+
 #[derive(Debug, PartialEq)]
 pub enum CommandType {
     Single(Command),
@@ -49,6 +51,11 @@ pub enum Expansion {
     },
     Command {
         ast: AST,
+        range: std::ops::RangeInclusive<usize>,
+    },
+    Glob {
+        pattern: String,
+        recursive: bool,
         range: std::ops::RangeInclusive<usize>,
     },
 }
@@ -144,14 +151,111 @@ fn parse_command(tokens: &[Token]) -> Option<Command> {
     }
 }
 
+fn parse_word(s: impl AsRef<str>) -> Word {
+    let s = s.as_ref();
+    let mut chars = s.chars().peekable();
+    let mut expansions = Vec::new();
+    let mut index = 0;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            ' ' => {}
+
+            '$' => match chars.peek() {
+                Some(&c) if util::is_valid_first_character_of_expansion(c) => {
+                    let c = chars.next().unwrap();
+
+                    let mut var = c.to_string();
+                    let start_index = index;
+
+                    while let Some(&c) = chars.peek() {
+                        if !util::is_valid_first_character_of_expansion(c) {
+                            break;
+                        }
+                        var.push(chars.next().unwrap());
+                        index += 1;
+                    }
+
+                    index += 1;
+
+                    expansions.push(Expansion::Parameter {
+                        name: var,
+                        range: start_index..=index,
+                    });
+                }
+
+                Some(&'(') => {
+                    let start_index = index;
+                    chars.next();
+                    let mut subcmd = String::new();
+                    while let Some(next) = chars.next() {
+                        index += 1;
+                        if next == ')' {
+                            break;
+                        }
+                        subcmd.push(next);
+                    }
+                    index += 1;
+                    let ast = parse(subcmd);
+                    expansions.push(Expansion::Command {
+                        ast,
+                        range: start_index..=index,
+                    });
+                }
+
+                c => panic!("got unexpected: {c:?}"),
+            },
+
+            '*' => {
+                let mut recursive = false;
+                let mut pattern = '*'.to_string();
+                let start_index = index;
+
+                while let Some(&c) = chars.peek() {
+                    match c {
+                        '*' => {
+                            chars.next();
+                            index += 1;
+                            recursive = true;
+                            pattern.push('*');
+                        }
+
+                        c => {
+                            if " /".contains(c) {
+                                break;
+                            }
+                            pattern.push(c);
+                            chars.next();
+                            index += 1;
+                        }
+                    }
+                }
+
+                expansions.push(Expansion::Glob {
+                    pattern,
+                    recursive,
+                    range: start_index..=index,
+                });
+            }
+
+            _ => {}
+        }
+        index += 1;
+    }
+
+    return Word::new(s, expansions);
+}
+
 fn parse_meta(token: &Token) -> Option<Meta> {
     match token {
         Token::String(s) => {
             let item = match s.split_once('=') {
                 Some((var, val)) => {
-                    Meta::Assignment(Word::new(var, vec![]), Word::new(val, vec![]))
+                    let var_word = parse_word(var);
+                    let val_word = parse_word(val);
+                    Meta::Assignment(var_word, val_word)
                 }
-                None => Meta::Word(Word::new(s, vec![])),
+                None => Meta::Word(parse_word(s)),
             };
 
             return Some(item);
@@ -162,64 +266,8 @@ fn parse_meta(token: &Token) -> Option<Meta> {
         }
 
         Token::DoubleQuotedString(s) => {
-            let mut chars = s.chars().peekable();
-            let mut expansions = Vec::new();
-            let mut index = 0;
-
-            while let Some(ch) = chars.next() {
-                match ch {
-                    ' ' => {}
-                    '$' => match chars.peek() {
-                        Some(&c) if c.is_alphanumeric() => {
-                            let c = chars.next().unwrap();
-
-                            let mut var = c.to_string();
-                            let start_index = index;
-
-                            while let Some(&c) = chars.peek() {
-                                if !c.is_alphanumeric() {
-                                    break;
-                                }
-                                var.push(chars.next().unwrap());
-                                index += 1;
-                            }
-
-                            index += 1;
-
-                            expansions.push(Expansion::Parameter {
-                                name: var,
-                                range: start_index..=index,
-                            });
-                        }
-
-                        Some(&'(') => {
-                            let start_index = index;
-                            chars.next();
-                            let mut subcmd = String::new();
-                            while let Some(next) = chars.next() {
-                                index += 1;
-                                if next == ')' {
-                                    break;
-                                }
-                                subcmd.push(next);
-                            }
-                            index += 1;
-                            let ast = parse(subcmd);
-                            expansions.push(Expansion::Command {
-                                ast,
-                                range: start_index..=index,
-                            });
-                        }
-
-                        c => panic!("got unexpected: {c:?}"),
-                    },
-
-                    _ => {}
-                }
-                index += 1;
-            }
-
-            return Some(Meta::Word(Word::new(s, expansions)));
+            let word = parse_word(s);
+            Some(Meta::Word(word))
         }
 
         Token::RedirectInput(s) => {
@@ -337,6 +385,35 @@ mod tests {
     }
 
     #[test]
+    fn asterisk_expansion_parsing() {
+        let input = "echo **/*.rs".to_string();
+        let ast = parse(input);
+
+        let expected = AST {
+            commands: vec![CommandType::Single(Command {
+                name: Word::new("echo", vec![]),
+                prefix: Vec::new(),
+                suffix: vec![Meta::Word(Word::new(
+                    "**/*.rs",
+                    vec![
+                        Expansion::Glob {
+                            pattern: "**".to_string(),
+                            recursive: true,
+                            range: 0..=1,
+                        },
+                        Expansion::Glob {
+                            pattern: "*.rs".to_string(),
+                            recursive: false,
+                            range: 3..=6,
+                        },
+                    ],
+                ))],
+            })],
+        };
+        assert_eq!(expected, ast);
+    }
+
+    #[test]
     fn variable_expansion_parsing() {
         let input = "echo \"yo $foo $A\"".to_string();
         let ast = parse(input);
@@ -367,7 +444,7 @@ mod tests {
 
     #[test]
     fn nested_pipeline_parsing() {
-        let input = r#"echo "I am: $(whoami | rev | grep -o -v foo)" | less"#.to_string();
+        let input = r#"echo "I \"am\": $(whoami | rev | grep -o -v foo)" | less"#.to_string();
         let ast = parse(input);
 
         let expected = AST {
@@ -376,9 +453,9 @@ mod tests {
                     name: Word::new("echo", vec![]),
                     prefix: Vec::new(),
                     suffix: vec![Meta::Word(Word::new(
-                        "I am: $(whoami | rev | grep -o -v foo)",
+                        "I \"am\": $(whoami | rev | grep -o -v foo)",
                         vec![Expansion::Command {
-                            range: 6..=37,
+                            range: 8..=39,
                             ast: AST {
                                 commands: vec![CommandType::Pipeline(vec![
                                     Command {

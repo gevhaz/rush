@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod lexer;
+mod util;
 
 use std::io::Write;
 
