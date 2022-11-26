@@ -661,33 +661,33 @@ mod tests {
     //        it's making me wonder if the lexing part should be
     //        removed entirely, since lexing a POSIX shell-ish language
     //        seems really difficult
-    // #[test]
-    // fn nested_quotes_in_command_expansion_parsing() {
-    //     let input = r#"echo "bat: $(cat "/sys/class/power_supply/BAT0/capacity")""#.to_string();
-    //     let ast = parse(input);
+    #[test]
+    fn nested_quotes_in_command_expansion_parsing() {
+        let input = r#"echo "bat: $(cat "/sys/class/power_supply/BAT0/capacity")""#.to_string();
+        let ast = parse(input);
 
-    //     let expected = AST {
-    //         commands: vec![CommandType::Single(Command {
-    //             name: Word::new("echo", vec![]),
-    //             prefix: vec![],
-    //             suffix: vec![Meta::Word(Word::new(
-    //                 "bat: $(cat \"/sys/class/power_supply/BAT0/capacity\")",
-    //                 vec![Expansion::Command {
-    //                     range: 5..=50,
-    //                     ast: AST { commands: vec![
-    //                         CommandType::Single(Command {
-    //                             name: Word::new("cat", vec![]),
-    //                             prefix: vec![],
-    //                             suffix: vec![
-    //                                 Meta::Word(Word::new("/sys/class/power_supply/BAT0/capacity", vec![])),
-    //                             ],
-    //                         }),
-    //                     ] },
-    //                 }],
-    //             ))],
-    //         })],
-    //     };
+        let expected = AST {
+            commands: vec![CommandType::Single(Command {
+                name: Word::new("echo", vec![]),
+                prefix: vec![],
+                suffix: vec![Meta::Word(Word::new(
+                    "bat: $(cat \"/sys/class/power_supply/BAT0/capacity\")",
+                    vec![Expansion::Command {
+                        range: 5..=50,
+                        ast: AST { commands: vec![
+                            CommandType::Single(Command {
+                                name: Word::new("cat", vec![]),
+                                prefix: vec![],
+                                suffix: vec![
+                                    Meta::Word(Word::new("/sys/class/power_supply/BAT0/capacity", vec![])),
+                                ],
+                            }),
+                        ] },
+                    }],
+                ))],
+            })],
+        };
 
-    //     assert_eq!(expected, ast);
-    // }
+        assert_eq!(expected, ast);
+    }
 }

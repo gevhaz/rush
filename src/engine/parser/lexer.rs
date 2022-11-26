@@ -1,3 +1,5 @@
+use std::{iter::Peekable, str::Chars};
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     String(String),
@@ -57,12 +59,12 @@ pub fn lex(input: String) -> Vec<Token> {
             }
 
             '"' => {
-                let s = advance_until(&mut chars, '"');
+                let s = advance_until(&mut chars, '"', true);
                 tokens.push(Token::DoubleQuotedString(s));
             }
 
             '\'' => {
-                let s = advance_until(&mut chars, '\'');
+                let s = advance_until(&mut chars, '\'', false);
                 tokens.push(Token::SingleQuotedString(s));
             }
 
@@ -120,12 +122,14 @@ pub fn lex(input: String) -> Vec<Token> {
     tokens
 }
 
-fn advance_until(chars: &mut std::iter::Peekable<std::str::Chars>, end: char) -> String {
+fn advance_until(chars: &mut Peekable<Chars>, end: char, check_nested_level: bool) -> String {
     let mut s = String::new();
 
     let mut is_escaped = false;
+    let mut nested_level = 0;
+
     while let Some(&next) = chars.peek() {
-        if !is_escaped && next == end {
+        if !is_escaped && (nested_level == 0 || !check_nested_level) && next == end {
             chars.next();
             break;
         }
@@ -139,11 +143,19 @@ fn advance_until(chars: &mut std::iter::Peekable<std::str::Chars>, end: char) ->
         let next = chars.next().unwrap();
         s.push(next);
         is_escaped = false;
+
+        if next == '$' {
+            if let Some(&'(') = chars.peek() {
+                nested_level += 1;
+            }
+        } else if next == ')' {
+            nested_level -= 1;
+        }
     }
     s
 }
 
-fn try_lex_redirect_input(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<Token> {
+fn try_lex_redirect_input(chars: &mut Peekable<Chars>) -> Option<Token> {
     if let Some(&' ') = chars.peek() {
         chars.next();
     }
@@ -157,7 +169,7 @@ fn try_lex_redirect_input(chars: &mut std::iter::Peekable<std::str::Chars>) -> O
 }
 
 fn try_lex_redirect_output(
-    chars: &mut std::iter::Peekable<std::str::Chars>,
+    chars: &mut Peekable<Chars>,
     dest: Option<String>,
 ) -> Option<Token> {
     if let Some(&' ') = chars.peek() {
@@ -173,7 +185,7 @@ fn try_lex_redirect_output(
 }
 
 fn try_lex_string(
-    chars: &mut std::iter::Peekable<std::str::Chars>,
+    chars: &mut Peekable<Chars>,
     start: Option<impl ToString>,
     allow_ampersand: bool,
 ) -> Token {
