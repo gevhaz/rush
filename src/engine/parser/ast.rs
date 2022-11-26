@@ -81,6 +81,11 @@ impl AST {
     }
 }
 
+pub fn parse(line: String) -> AST {
+    let tokens = super::lex(line);
+    parse_tokens(tokens)
+}
+
 fn parse_command(tokens: &[Token]) -> Option<Command> {
     let mut tokens = tokens.into_iter().peekable();
 
@@ -151,7 +156,11 @@ fn parse_command(tokens: &[Token]) -> Option<Command> {
     }
 }
 
-fn parse_word(s: impl AsRef<str>) -> Word {
+fn parse_word(s: impl AsRef<str>, should_expand: bool) -> Word {
+    if !should_expand {
+        return Word::new(s.as_ref(), Vec::new());
+    }
+
     let s = s.as_ref();
     let mut chars = s.chars().peekable();
     let mut expansions = Vec::new();
@@ -251,22 +260,23 @@ fn parse_meta(token: &Token) -> Option<Meta> {
         Token::String(s) => {
             let item = match s.split_once('=') {
                 Some((var, val)) => {
-                    let var_word = parse_word(var);
-                    let val_word = parse_word(val);
+                    let var_word = parse_word(var, true);
+                    let val_word = parse_word(val, true);
                     Meta::Assignment(var_word, val_word)
                 }
-                None => Meta::Word(parse_word(s)),
+                None => Meta::Word(parse_word(s, true)),
             };
 
             return Some(item);
         }
 
         Token::SingleQuotedString(s) => {
-            return Some(Meta::Word(Word::new(s, vec![])));
+            let word = parse_word(s, false);
+            Some(Meta::Word(word))
         }
 
         Token::DoubleQuotedString(s) => {
-            let word = parse_word(s);
+            let word = parse_word(s, true);
             Some(Meta::Word(word))
         }
 
@@ -288,11 +298,6 @@ fn parse_meta(token: &Token) -> Option<Meta> {
 
         _ => unreachable!(),
     }
-}
-
-pub fn parse(line: String) -> AST {
-    let tokens = super::lex(line);
-    parse_tokens(tokens)
 }
 
 fn parse_tokens(tokens: Vec<Token>) -> AST {
@@ -440,6 +445,26 @@ mod tests {
             },
             ast
         );
+    }
+
+    #[test]
+    fn single_quote_doesnt_expand_parsing() {
+        let input = "echo '** $foo'".to_string();
+        let ast = parse(input);
+
+        let expected = AST {
+            commands: vec![
+                CommandType::Single(Command {
+                    name: Word::new("echo", vec![]),
+                    prefix: vec![],
+                    suffix: vec![
+                        Meta::Word(Word::new("** $foo", vec![])),
+                    ],
+                }),
+            ],
+        };
+
+        assert_eq!(expected, ast);
     }
 
     #[test]
