@@ -51,15 +51,18 @@ pub enum Expansion {
         name: String,
         range: RangeInclusive<usize>,
     },
+
     Command {
         ast: AST,
         range: RangeInclusive<usize>,
     },
+
     Glob {
         pattern: String,
         recursive: bool,
         range: RangeInclusive<usize>,
     },
+
     Tilde {
         index: usize,
     },

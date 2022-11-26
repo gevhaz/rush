@@ -114,19 +114,7 @@ pub fn read_and_execute<W: Write>(engine: &mut Engine<W>) -> Result<()> {
 }
 
 fn walk_ast<W: Write>(engine: &mut Engine<W>, ast: AST) -> Result<()> {
-    for command in ast.commands() {
-        match command {
-            CommandType::Single(cmd) => {
-                writeln!(engine.writer, "got single command: {cmd:#?}")?;
-            }
-            CommandType::Pipeline(pipeline) => {
-                writeln!(engine.writer, "got multiple commands:")?;
-                for cmd in pipeline {
-                    writeln!(engine.writer, "command: {cmd:#?}")?;
-                }
-            }
-        }
-    }
+    writeln!(engine.writer, "{ast:#?}")?;
     Ok(())
 }
 
