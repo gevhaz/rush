@@ -61,8 +61,7 @@ pub enum Expansion {
         range: RangeInclusive<usize>,
     },
     Tilde {
-        pattern: String,
-        range: RangeInclusive<usize>,
+        index: usize,
     },
 }
 
@@ -178,6 +177,8 @@ fn parse_word(s: impl AsRef<str>, expand: Expand) -> Word {
     let mut expansions = Vec::new();
     let mut index = 0;
 
+    let mut prev_char = None;
+
     while let Some(ch) = chars.next() {
         match ch {
             ' ' => {}
@@ -262,11 +263,18 @@ fn parse_word(s: impl AsRef<str>, expand: Expand) -> Word {
                 });
             }
 
-            '~' if matches!(expand, Expand::All) => {}
+            '~' if matches!(expand, Expand::All) && matches!(prev_char, Some(' ') | None) => {
+                match chars.peek() {
+                    Some(' ') | Some('/') | None => expansions.push(Expansion::Tilde { index }),
+                    _ => {}
+                }
+                index += 1;
+            }
 
             _ => {}
         }
         index += 1;
+        prev_char = Some(ch);
     }
 
     return Word::new(s, expansions);
@@ -603,17 +611,57 @@ mod tests {
                     "bat: $(cat /sys/class/power_supply/BAT0/capacity)",
                     vec![Expansion::Command {
                         range: 5..=48,
-                        ast: AST { commands: vec![
-                            CommandType::Single(Command {
+                        ast: AST {
+                            commands: vec![CommandType::Single(Command {
                                 name: Word::new("cat", vec![]),
                                 prefix: vec![],
-                                suffix: vec![
-                                    Meta::Word(Word::new("/sys/class/power_supply/BAT0/capacity", vec![])),
-                                ],
-                            }),
-                        ] },
+                                suffix: vec![Meta::Word(Word::new(
+                                    "/sys/class/power_supply/BAT0/capacity",
+                                    vec![],
+                                ))],
+                            })],
+                        },
                     }],
                 ))],
+            })],
+        };
+
+        assert_eq!(expected, ast);
+    }
+
+    #[test]
+    fn tilde_expansion_parsing() {
+        let input = "ls ~ ~/ ~/foo".to_string();
+        let ast = parse(input);
+
+        let expected = AST {
+            commands: vec![CommandType::Single(Command {
+                name: Word::new("ls", vec![]),
+                prefix: vec![],
+                suffix: vec![
+                    Meta::Word(Word::new("~", vec![Expansion::Tilde { index: 0 }])),
+                    Meta::Word(Word::new("~/", vec![Expansion::Tilde { index: 0 }])),
+                    Meta::Word(Word::new("~/foo", vec![Expansion::Tilde { index: 0 }])),
+                ],
+            })],
+        };
+
+        assert_eq!(expected, ast);
+
+        let input = "ls foo~ bar/~ ./~ ~% ~baz".to_string();
+        let ast = parse(input);
+
+        let expected = AST {
+            commands: vec![CommandType::Single(Command {
+                name: Word::new("ls", vec![]),
+                prefix: vec![],
+                suffix: vec![
+                    Meta::Word(Word::new("foo~", vec![])),
+                    Meta::Word(Word::new("bar/~", vec![])),
+                    Meta::Word(Word::new("./~", vec![])),
+                    Meta::Word(Word::new("~%", vec![])),
+                    Meta::Word(Word::new("~baz", vec![])),
+                ],
             })],
         };
 
