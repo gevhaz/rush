@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     String(String),
     SingleQuotedString(String),
@@ -80,10 +80,10 @@ pub fn lex(input: String) -> Vec<Token> {
                 }
             },
 
-            c if c.is_digit(10) => {
+            c if c.is_ascii_digit() => {
                 let mut fd = String::from(c);
                 while let Some(&c) = chars.peek() {
-                    if c.is_digit(10) {
+                    if c.is_ascii_digit() {
                         fd.push(c);
                         chars.next();
                     } else {

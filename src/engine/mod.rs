@@ -14,8 +14,7 @@ pub use self::builtin::Builtins;
 pub use self::history::History;
 pub use self::parser::AST;
 pub use self::parser::Line;
-use self::parser::ast::{CommandType, parse};
-use self::parser::parse_line;
+use self::parser::ast::parse;
 
 pub struct Engine<W: Write> {
     pub writer: W,

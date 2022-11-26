@@ -39,7 +39,7 @@ pub enum Meta {
     Assignment(Word, Word),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Redirect {
     Output { from: Option<String>, to: String },
     Input { to: String },
@@ -95,13 +95,13 @@ pub fn parse(line: String) -> AST {
 }
 
 fn parse_command(tokens: &[Token]) -> Option<Command> {
-    let mut tokens = tokens.into_iter().peekable();
+    let tokens = tokens.iter().peekable();
 
     let mut name = None;
     let mut prefix = Vec::new();
     let mut suffix = Vec::new();
 
-    while let Some(token) = tokens.next() {
+    for token in tokens {
         match token {
             Token::Colon => { /* noop */ }
 
@@ -216,7 +216,7 @@ fn parse_word(s: impl AsRef<str>, expand: Expand) -> Word {
                     let start_index = index;
                     chars.next();
                     let mut subcmd = String::new();
-                    while let Some(next) = chars.next() {
+                    for next in chars.by_ref() {
                         index += 1;
                         if next == ')' {
                             break;
@@ -280,7 +280,7 @@ fn parse_word(s: impl AsRef<str>, expand: Expand) -> Word {
         prev_char = Some(ch);
     }
 
-    return Word::new(s, expansions);
+    Word::new(s, expansions)
 }
 
 fn parse_meta(token: &Token) -> Option<Meta> {
@@ -295,7 +295,7 @@ fn parse_meta(token: &Token) -> Option<Meta> {
                 None => Meta::Word(parse_word(s, Expand::All)),
             };
 
-            return Some(item);
+            Some(item)
         }
 
         Token::SingleQuotedString(s) => {
@@ -309,7 +309,7 @@ fn parse_meta(token: &Token) -> Option<Meta> {
         }
 
         Token::RedirectInput(s) => {
-            return Some(Meta::Redirect(Redirect::Input { to: s.to_string() }));
+            Some(Meta::Redirect(Redirect::Input { to: s.to_string() }))
         }
 
         Token::RedirectOutput(from, to) => {
@@ -318,10 +318,10 @@ fn parse_meta(token: &Token) -> Option<Meta> {
                 None => None,
             };
             let to = to.to_string();
-            return Some(Meta::Redirect(Redirect::Output {
+            Some(Meta::Redirect(Redirect::Output {
                 from: from.cloned(),
                 to,
-            }));
+            }))
         }
 
         _ => unreachable!(),
@@ -346,7 +346,7 @@ fn parse_tokens(tokens: Vec<Token>) -> AST {
 
     for pipeline in commands {
         match &pipeline[..] {
-            &[cmd] if cmd.len() > 0 => {
+            &[cmd] if !cmd.is_empty() => {
                 if let Some(cmd) = parse_command(cmd) {
                     ast.add_command(CommandType::Single(cmd));
                 } else {
@@ -359,7 +359,7 @@ fn parse_tokens(tokens: Vec<Token>) -> AST {
                 let mut commands = Vec::new();
 
                 for &command in cmds {
-                    if command.len() == 0 {
+                    if command.is_empty() {
                         continue;
                     }
 
@@ -371,7 +371,7 @@ fn parse_tokens(tokens: Vec<Token>) -> AST {
                     }
                 }
 
-                if commands.len() > 0 {
+                if !commands.is_empty() {
                     ast.add_command(CommandType::Pipeline(commands));
                 }
             }
