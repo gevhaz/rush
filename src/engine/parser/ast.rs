@@ -308,9 +308,7 @@ fn parse_meta(token: &Token) -> Option<Meta> {
             Some(Meta::Word(word))
         }
 
-        Token::RedirectInput(s) => {
-            Some(Meta::Redirect(Redirect::Input { to: s.to_string() }))
-        }
+        Token::RedirectInput(s) => Some(Meta::Redirect(Redirect::Input { to: s.to_string() })),
 
         Token::RedirectOutput(from, to) => {
             let from = match from {
@@ -674,15 +672,16 @@ mod tests {
                     "bat: $(cat \"/sys/class/power_supply/BAT0/capacity\")",
                     vec![Expansion::Command {
                         range: 5..=50,
-                        ast: AST { commands: vec![
-                            CommandType::Single(Command {
+                        ast: AST {
+                            commands: vec![CommandType::Single(Command {
                                 name: Word::new("cat", vec![]),
                                 prefix: vec![],
-                                suffix: vec![
-                                    Meta::Word(Word::new("/sys/class/power_supply/BAT0/capacity", vec![])),
-                                ],
-                            }),
-                        ] },
+                                suffix: vec![Meta::Word(Word::new(
+                                    "/sys/class/power_supply/BAT0/capacity",
+                                    vec![],
+                                ))],
+                            })],
+                        },
                     }],
                 ))],
             })],
@@ -690,4 +689,52 @@ mod tests {
 
         assert_eq!(expected, ast);
     }
+
+    // TODO: when this passes, nested command expansion probably works OK
+    // #[test]
+    // fn nested_commands_parsing() {
+    //     let input = r#"echo "foo: $(echo "$(whoami | lolcat)") yo""#.to_string();
+    //     let ast = parse(input);
+
+    //     let expected = AST {
+    //         commands: vec![CommandType::Single(Command {
+    //             name: Word::new("echo", vec![]),
+    //             prefix: vec![],
+    //             suffix: vec![Meta::Word(Word::new(
+    //                 r#"foo: $(echo "$(whoami | lolcat)") yo"#,
+    //                 vec![Expansion::Command {
+    //                     range: 5..=22,
+    //                     ast: AST {
+    //                         commands: vec![CommandType::Single(Command {
+    //                             name: Word::new("echo", vec![]),
+    //                             prefix: vec![],
+    //                             suffix: vec![Meta::Word(Word::new(
+    //                                 "$(whoami | lolcat)",
+    //                                 vec![Expansion::Command {
+    //                                     range: 0..=17,
+    //                                     ast: AST {
+    //                                         commands: vec![CommandType::Pipeline(vec![
+    //                                             Command {
+    //                                                 name: Word::new("whoami", vec![]),
+    //                                                 prefix: vec![],
+    //                                                 suffix: vec![],
+    //                                             },
+    //                                             Command {
+    //                                                 name: Word::new("lolcat", vec![]),
+    //                                                 prefix: vec![],
+    //                                                 suffix: vec![],
+    //                                             },
+    //                                         ])],
+    //                                     },
+    //                                 }],
+    //                             ))],
+    //                         })],
+    //                     },
+    //                 }],
+    //             ))],
+    //         })],
+    //     };
+
+    //     assert_eq!(expected, ast);
+    // }
 }
