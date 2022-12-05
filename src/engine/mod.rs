@@ -4,7 +4,7 @@ pub mod parser;
 
 use std::io::{self, Stdout, Write};
 use std::path::PathBuf;
-use std::process;
+use std::process::{self, ChildStdout, Stdio};
 
 use crate::config::ABBREVIATIONS;
 use crate::repl::input::read_line;
@@ -12,9 +12,9 @@ use crate::{path, Result};
 
 pub use self::builtin::Builtins;
 pub use self::history::History;
-pub use self::parser::AST;
+use self::parser::ast::{parse, CommandType};
 pub use self::parser::Line;
-use self::parser::ast::parse;
+pub use self::parser::AST;
 
 pub struct Engine<W: Write> {
     pub writer: W,
@@ -113,8 +113,56 @@ pub fn read_and_execute<W: Write>(engine: &mut Engine<W>) -> Result<()> {
 }
 
 fn walk_ast<W: Write>(engine: &mut Engine<W>, ast: AST) -> Result<()> {
-    writeln!(engine.writer, "{ast:#?}")?;
+    for cmd in ast.commands() {
+        execute(cmd)?;
+    }
     Ok(())
+}
+
+fn execute(cmd: &CommandType) -> Result<ExitStatus> {
+    match cmd {
+        CommandType::Single(cmd) => {
+            let child = process::Command::new(cmd.cmd_name())
+                .args(cmd.args())
+                .spawn()?;
+            let result = child.wait_with_output()?;
+            let code = result.status.code().unwrap_or_default();
+
+            Ok(ExitStatus::from(code))
+        }
+
+        CommandType::Pipeline(cmds) if cmds.is_empty() => todo!(),
+
+        CommandType::Pipeline(cmds) => {
+            let mut prev_result: Option<(Option<ChildStdout>, i32)> = None;
+            let mut statuses = Vec::with_capacity(cmds.len());
+
+            for (i, cmd) in cmds.iter().enumerate() {
+                let stdin = match prev_result {
+                    Some((Some(stdout), _)) => Stdio::from(stdout),
+                    _ => Stdio::inherit(),
+                };
+
+                let stdout = if i == cmds.len() - 1 {
+                    Stdio::inherit()
+                } else {
+                    Stdio::piped()
+                };
+
+                let mut child = process::Command::new(cmd.cmd_name())
+                    .args(cmd.args())
+                    .stdin(stdin)
+                    .stdout(stdout)
+                    .spawn()?;
+
+                prev_result = Some((child.stdout.take(), 0));
+
+                let result = child.wait_with_output()?;
+                statuses.push(ExitStatus::from(result.status.code().unwrap_or_default()));
+            }
+            Ok(statuses.swap_remove(cmds.len() - 1))
+        }
+    }
 }
 
 fn execute_command(input: Line) -> Result<ExitStatus> {

@@ -12,15 +12,61 @@ pub enum CommandType {
 
 #[derive(Debug, PartialEq)]
 pub struct Command {
-    name: Word,
-    prefix: Vec<Meta>,
-    suffix: Vec<Meta>,
+    pub name: Word,
+    pub prefix: Vec<Meta>,
+    pub suffix: Vec<Meta>,
+}
+
+impl Command {
+    pub fn cmd_name(&self) -> &String {
+        &self.name.name
+    }
+
+    pub fn args(&self) -> Vec<String> {
+        self.suffix
+            .iter()
+            .filter_map(|m: &Meta| {
+                if let Meta::Word(w) = m {
+                    Some(w.name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
+impl ToString for Command {
+    fn to_string(&self) -> String {
+        let p = self
+            .prefix
+            .iter()
+            .map(|s| s.to_string().trim().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let s = self
+            .suffix
+            .iter()
+            .map(|s| s.to_string().trim().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "{}{}{}",
+            if p.is_empty() {
+                "".to_string()
+            } else {
+                p + " "
+            },
+            self.name.to_string() + if s.is_empty() { "" } else { " " },
+            s,
+        )
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Word {
-    name: String,
-    expansions: Vec<Expansion>,
+    pub name: String,
+    pub expansions: Vec<Expansion>,
 }
 
 impl Word {
@@ -32,11 +78,34 @@ impl Word {
     }
 }
 
+impl ToString for Word {
+    fn to_string(&self) -> String {
+        self.name.clone()
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Meta {
     Redirect(Redirect),
     Word(Word),
     Assignment(Word, Word),
+}
+
+impl ToString for Meta {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Word(word) => word.name.clone(),
+            Self::Redirect(redirect) => match redirect {
+                Redirect::Input { to } => format!("<{}", to),
+                Redirect::Output { from: None, to } => format!(">{}", to),
+                Redirect::Output {
+                    from: Some(from),
+                    to,
+                } => format!("{}>{}", from, to),
+            },
+            Self::Assignment(var, val) => format!("{}={}", var.name, val.name),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

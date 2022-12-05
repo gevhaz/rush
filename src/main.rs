@@ -5,6 +5,7 @@ mod error;
 mod path;
 mod repl;
 
+use crate::engine::parser::ast::parse;
 pub use crate::engine::{Engine, ExitStatus};
 pub use crate::error::{Error, Result};
 
@@ -18,6 +19,12 @@ fn main() {
         for token in tokens {
             println!("{:?}", token);
         }
+        return;
+    }
+
+    if args.ast {
+        let ast = parse(args.command.unwrap());
+        println!("{:#?}", ast);
         return;
     }
 

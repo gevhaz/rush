@@ -35,32 +35,11 @@ impl Repl {
             }
 
             if let Err(e) = read_and_execute(&mut self.engine) {
-                eprintln!("rush: Error occurred when reading or executing: {e}");
+                writeln!(
+                    self.engine.writer,
+                    "rush: Error occurred when reading or executing: {e}"
+                )?;
             }
-
-            // match input::input(&mut self.engine) {
-            //     Ok(Some(command)) => match self.engine.execute(command) {
-            //         Ok(status) => {
-            //             self.last_status = Some(status);
-            //         }
-
-            //         Err(e) => {
-            //             writeln!(
-            //                 self.engine.writer,
-            //                 "rush: Error occurred when executing command: {e}"
-            //             )?;
-            //         }
-            //     },
-
-            //     Ok(None) => {}
-
-            //     Err(e) => {
-            //         writeln!(
-            //             self.engine.writer,
-            //             "rush: Error occurred when reading input: {e}"
-            //         )?;
-            //     }
-            // };
         }
     }
 

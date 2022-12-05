@@ -6,4 +6,7 @@ pub struct Args {
 
     #[arg(long, requires("command"), help("Lex the command specified by --command, and exit"))]
     pub lex: bool,
+
+    #[arg(long, requires("command"), help("Print the AST of the command specified by --command, and exit"))]
+    pub ast: bool,
 }
