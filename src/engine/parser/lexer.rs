@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn lex_basic() {
-        let input = "echo 'foo bar' | lolcat".to_string();
+        let input = "echo 'foo bar' |lolcat".to_string();
         let tokens = lex(input);
 
         assert_eq!(
@@ -303,7 +303,7 @@ mod tests {
 
     #[test]
     fn lex_num() {
-        let input = "echo 123 2>foo.txt".to_string();
+        let input = "echo 123 2> foo.txt".to_string();
         let tokens = lex(input);
 
         assert_eq!(

@@ -135,7 +135,7 @@ fn parse_command(tokens: &[Token]) -> Option<Command> {
                 }
             }
 
-            Token::RedirectInput(_) => todo!(),
+            Token::RedirectInput(_) => todo!("input redirection is not yet implemented"),
 
             // Token::LParen => todo!("( subshells are not yet implemented"),
             // Token::RParen => todo!(") subshells are not yet implemented"),
@@ -213,13 +213,23 @@ fn parse_word(s: impl AsRef<str>, expand: Expand) -> Word {
                 }
 
                 Some(&'(') => {
+                    let mut nested_level = 0;
                     let start_index = index;
                     chars.next();
                     let mut subcmd = String::new();
-                    for next in chars.by_ref() {
+                    while let Some(next) = chars.next() {
+                        if next == '$' {
+                            if let Some(&'(') = chars.peek() {
+                                nested_level += 1;
+                            }
+                        }
                         index += 1;
                         if next == ')' {
-                            break;
+                            if nested_level > 0 {
+                                nested_level -= 1;
+                            } else {
+                                break;
+                            }
                         }
                         subcmd.push(next);
                     }
@@ -690,10 +700,56 @@ mod tests {
         assert_eq!(expected, ast);
     }
 
-    // TODO: when this passes, nested command expansion probably works OK
+    #[test]
+    fn nested_commands_parsing() {
+        let input = r#"echo "foo: $(echo "$(whoami | lolcat)") yo""#.to_string();
+        let ast = parse(input);
+
+        let expected = AST {
+            commands: vec![CommandType::Single(Command {
+                name: Word::new("echo", vec![]),
+                prefix: vec![],
+                suffix: vec![Meta::Word(Word::new(
+                    r#"foo: $(echo "$(whoami | lolcat)") yo"#,
+                    vec![Expansion::Command {
+                        range: 5..=32,
+                        ast: AST {
+                            commands: vec![CommandType::Single(Command {
+                                name: Word::new("echo", vec![]),
+                                prefix: vec![],
+                                suffix: vec![Meta::Word(Word::new(
+                                    "$(whoami | lolcat)",
+                                    vec![Expansion::Command {
+                                        range: 0..=17,
+                                        ast: AST {
+                                            commands: vec![CommandType::Pipeline(vec![
+                                                Command {
+                                                    name: Word::new("whoami", vec![]),
+                                                    prefix: vec![],
+                                                    suffix: vec![],
+                                                },
+                                                Command {
+                                                    name: Word::new("lolcat", vec![]),
+                                                    prefix: vec![],
+                                                    suffix: vec![],
+                                                },
+                                            ])],
+                                        },
+                                    }],
+                                ))],
+                            })],
+                        },
+                    }],
+                ))],
+            })],
+        };
+
+        assert_eq!(expected, ast);
+    }
+
     // #[test]
-    // fn nested_commands_parsing() {
-    //     let input = r#"echo "foo: $(echo "$(whoami | lolcat)") yo""#.to_string();
+    // fn multiple_nested_command_expansions_parsing() {
+    //     let input = r#"echo "$(cat $(echo "$(cat foo)"))""#.to_string();
     //     let ast = parse(input);
 
     //     let expected = AST {
@@ -701,30 +757,39 @@ mod tests {
     //             name: Word::new("echo", vec![]),
     //             prefix: vec![],
     //             suffix: vec![Meta::Word(Word::new(
-    //                 r#"foo: $(echo "$(whoami | lolcat)") yo"#,
+    //                 r#"$(cat $(echo "$(cat foo)"))"#,
     //                 vec![Expansion::Command {
-    //                     range: 5..=22,
+    //                     range: 0..=26,
     //                     ast: AST {
     //                         commands: vec![CommandType::Single(Command {
-    //                             name: Word::new("echo", vec![]),
+    //                             name: Word::new("cat", vec![]),
     //                             prefix: vec![],
     //                             suffix: vec![Meta::Word(Word::new(
-    //                                 "$(whoami | lolcat)",
+    //                                 r#"$(echo "$(cat foo)")"#,
     //                                 vec![Expansion::Command {
-    //                                     range: 0..=17,
+    //                                     range: 0..=20,
     //                                     ast: AST {
-    //                                         commands: vec![CommandType::Pipeline(vec![
-    //                                             Command {
-    //                                                 name: Word::new("whoami", vec![]),
-    //                                                 prefix: vec![],
-    //                                                 suffix: vec![],
-    //                                             },
-    //                                             Command {
-    //                                                 name: Word::new("lolcat", vec![]),
-    //                                                 prefix: vec![],
-    //                                                 suffix: vec![],
-    //                                             },
-    //                                         ])],
+    //                                         commands: vec![CommandType::Single(Command {
+    //                                             name: Word::new("echo", vec![]),
+    //                                             prefix: vec![],
+    //                                             suffix: vec![Meta::Word(Word::new(
+    //                                                 "$(cat foo)",
+    //                                                 vec![Expansion::Command {
+    //                                                     range: 0..=10,
+    //                                                     ast: AST {
+    //                                                         commands: vec![CommandType::Single(
+    //                                                             Command {
+    //                                                                 name: Word::new("cat", vec![]),
+    //                                                                 prefix: vec![],
+    //                                                                 suffix: vec![Meta::Word(
+    //                                                                     Word::new("foo", vec![]),
+    //                                                                 )],
+    //                                                             },
+    //                                                         )],
+    //                                                     },
+    //                                                 }],
+    //                                             ))],
+    //                                         })],
     //                                     },
     //                                 }],
     //                             ))],
