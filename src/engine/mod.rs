@@ -9,14 +9,15 @@ use crate::config::ABBREVIATIONS;
 use crate::repl::input::read_line;
 use crate::{path, Result};
 
-pub use self::history::History;
+use self::history::DummyHistory;
+pub use self::history::{FileHistory, History};
 use self::parser::ast::{parse, CommandType, SyntaxTree};
 
 pub struct Engine<W: Write> {
     pub writer: W,
     pub prev_dir: Option<PathBuf>,
     pub commands: Vec<String>,
-    pub history: History,
+    pub history: Box<dyn History>,
 }
 
 impl<W: Write> Engine<W> {
@@ -49,17 +50,18 @@ impl<W: Write> Engine<W> {
 
 impl Engine<Stdout> {
     pub fn new() -> Self {
-        let history = History::init().expect("could not initialize history");
+        let history = FileHistory::init().expect("could not initialize history");
         Self {
             prev_dir: None,
             writer: io::stdout(),
             commands: path::get_cmds_from_path(),
-            history,
+            history: Box::new(history),
         }
     }
 
     pub fn read_and_execute(&mut self) -> Result<Vec<ExitStatus>> {
         let line = read_line(self)?;
+        self.history.append(&line)?;
         let ast = parse(line);
         self.walk_ast(ast)
     }
@@ -70,14 +72,15 @@ impl Engine<Stdout> {
     }
 
     fn walk_ast(&mut self, ast: SyntaxTree) -> Result<Vec<ExitStatus>> {
-        ast.commands()
-            .iter()
+        ast.consume()
+            .into_iter()
             .fold(Ok(vec![]), |_, c| self.execute(c))
     }
 
-    pub fn execute(&mut self, cmd: &CommandType) -> Result<Vec<ExitStatus>> {
+    pub fn execute(&mut self, cmd: CommandType) -> Result<Vec<ExitStatus>> {
         match cmd {
             CommandType::Single(cmd) => {
+                let cmd = cmd.expand_all();
                 let child = process::Command::new(cmd.cmd_name())
                     .args(cmd.args())
                     .spawn()?;
@@ -122,21 +125,27 @@ impl Engine<Stdout> {
     }
 }
 
+impl Default for Engine<Stdout> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Engine<Vec<u8>> {
     pub fn in_memory() -> Self {
-        let history = History::init().expect("could not initialize history");
+        let history = DummyHistory;
         Self {
             writer: Vec::new(),
             prev_dir: None,
             commands: path::get_cmds_from_path(),
-            history,
+            history: Box::new(history),
         }
     }
 
     pub fn output(&self) -> std::borrow::Cow<str> {
         String::from_utf8_lossy(&self.writer)
     }
-    
+
     pub fn execute_line(&mut self, line: impl ToString) -> Result<()> {
         let ast = parse(line.to_string());
         self.walk_ast(ast)
@@ -149,14 +158,11 @@ impl Engine<Vec<u8>> {
     fn execute(&mut self, cmd: &CommandType) -> Result<()> {
         match cmd {
             CommandType::Single(cmd) => {
-                let child = process::Command::new(cmd.cmd_name())
+                let mut child = process::Command::new(cmd.cmd_name())
                     .args(cmd.args())
                     .output()?;
 
-                write!(self.writer, "{}", String::from_utf8_lossy(&child.stdout))?;
-
-                // let code = result.status.code().unwrap_or_default();
-                // Ok(vec![ExitStatus::from(code)])
+                self.writer.append(&mut child.stdout);
 
                 Ok(())
             }
@@ -186,20 +192,11 @@ impl Engine<Vec<u8>> {
 
                         prev_result = Some((child.stdout.take(), 0));
                     }
-
-                    // let result = child.wait_with_output()?;
-                    // statuses.push(ExitStatus::from(result.status.code().unwrap_or_default()));
                 }
 
                 Ok(())
             }
         }
-    }
-}
-
-impl Default for Engine<Stdout> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
