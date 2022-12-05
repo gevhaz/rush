@@ -1,4 +1,5 @@
-use std::{iter::Peekable, str::Chars};
+use std::iter::Peekable;
+use std::str::Chars;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
@@ -11,7 +12,6 @@ pub enum Token {
 
     // LBrace,
     // RBrace,
-
     RedirectOutput(Option<String>, String),
     RedirectInput(String),
     Pipe,
@@ -36,7 +36,6 @@ pub fn lex(input: String) -> Vec<Token> {
             // ')' => tokens.push(Token::RParen),
             // '{' => tokens.push(Token::LBrace),
             // '}' => tokens.push(Token::RBrace),
-
             '<' => {
                 if let Some(token) = try_lex_redirect_input(&mut chars) {
                     tokens.push(token);
@@ -168,10 +167,7 @@ fn try_lex_redirect_input(chars: &mut Peekable<Chars>) -> Option<Token> {
     }
 }
 
-fn try_lex_redirect_output(
-    chars: &mut Peekable<Chars>,
-    dest: Option<String>,
-) -> Option<Token> {
+fn try_lex_redirect_output(chars: &mut Peekable<Chars>, dest: Option<String>) -> Option<Token> {
     if let Some(&' ') = chars.peek() {
         chars.next();
     }

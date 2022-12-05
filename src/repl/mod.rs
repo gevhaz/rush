@@ -9,12 +9,11 @@ use crossterm::{execute, style, terminal};
 use crate::config::{self, Colors};
 use crate::engine::read_and_execute;
 use crate::path::Expand;
-
 use crate::{Engine, ExitStatus, Result};
 
 pub struct Repl {
     engine: Engine<Stdout>,
-    last_status: Option<ExitStatus>,
+    last_status: Option<Vec<ExitStatus>>,
 }
 
 impl Repl {
@@ -34,11 +33,17 @@ impl Repl {
                 )?;
             }
 
-            if let Err(e) = read_and_execute(&mut self.engine) {
-                writeln!(
-                    self.engine.writer,
-                    "rush: Error occurred when reading or executing: {e}"
-                )?;
+            match read_and_execute(&mut self.engine) {
+                Ok(statuses) => {
+                    self.last_status = Some(statuses);
+                }
+
+                Err(e) => {
+                    writeln!(
+                        self.engine.writer,
+                        "rush: Error occurred when reading or executing: {e}"
+                    )?;
+                }
             }
         }
     }
@@ -48,9 +53,15 @@ impl Repl {
 
         let cwd = format!("{} ", env::current_dir()?.display().to_string().expand()?);
 
-        let exit_code = match self.last_status {
-            Some(ExitStatus { code }) if code != 0 => {
-                format!("[{code}] ")
+        let exit_code = match &self.last_status {
+            Some(codes) if !codes.iter().all(|c| c.code == 0) => {
+                let codes = codes
+                    .iter()
+                    .map(|c| format!("{}", c.code))
+                    .collect::<Vec<_>>()
+                    .join("|");
+
+                format!("[{codes}] ")
             }
 
             _ => "".to_string(),

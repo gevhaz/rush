@@ -1,13 +1,24 @@
 use std::ops::RangeInclusive;
 
-use crate::engine::parser::Token;
-
-use super::util;
+use super::{util, Token};
 
 #[derive(Debug, PartialEq)]
 pub enum CommandType {
     Single(Command),
     Pipeline(Vec<Command>),
+}
+
+impl ToString for CommandType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Single(cmd) => cmd.to_string(),
+            Self::Pipeline(cmds) => cmds
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" | "),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -122,7 +133,7 @@ pub enum Expansion {
     },
 
     Command {
-        ast: AST,
+        ast: SyntaxTree,
         range: RangeInclusive<usize>,
     },
 
@@ -138,11 +149,27 @@ pub enum Expansion {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct AST {
+pub struct SyntaxTree {
     commands: Vec<CommandType>,
 }
 
-impl AST {
+impl Default for SyntaxTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ToString for SyntaxTree {
+    fn to_string(&self) -> String {
+        self.commands
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+}
+
+impl SyntaxTree {
     pub fn new() -> Self {
         Self {
             commands: Default::default(),
@@ -158,7 +185,7 @@ impl AST {
     }
 }
 
-pub fn parse(line: String) -> AST {
+pub fn parse(line: String) -> SyntaxTree {
     let tokens = super::lex(line);
     parse_tokens(tokens)
 }
@@ -405,7 +432,7 @@ fn parse_meta(token: &Token) -> Option<Meta> {
     }
 }
 
-fn parse_tokens(tokens: Vec<Token>) -> AST {
+fn parse_tokens(tokens: Vec<Token>) -> SyntaxTree {
     // Split tokens by semicolons to get list of commands,
     // then each command by pipe to get pipeline in command
     let commands = tokens
@@ -417,7 +444,7 @@ fn parse_tokens(tokens: Vec<Token>) -> AST {
         })
         .collect::<Vec<_>>();
 
-    let mut ast = AST {
+    let mut ast = SyntaxTree {
         commands: Vec::with_capacity(commands.len()),
     };
 
@@ -470,7 +497,7 @@ mod tests {
         println!("{:#?}", &ast);
 
         assert_eq!(
-            AST {
+            SyntaxTree {
                 commands: vec![CommandType::Pipeline(vec![
                     Command {
                         name: Word::new("echo", vec![]),
@@ -499,7 +526,7 @@ mod tests {
         let input = "echo **/*.rs".to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Single(Command {
                 name: Word::new("echo", vec![]),
                 prefix: vec![],
@@ -529,7 +556,7 @@ mod tests {
         let ast = parse(input);
 
         assert_eq!(
-            AST {
+            SyntaxTree {
                 commands: vec![CommandType::Single(Command {
                     name: Word::new("echo", vec![]),
                     prefix: vec![],
@@ -557,7 +584,7 @@ mod tests {
         let input = "echo '** $foo'".to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Single(Command {
                 name: Word::new("echo", vec![]),
                 prefix: vec![],
@@ -573,7 +600,7 @@ mod tests {
         let input = r#"echo "I \"am\": $(whoami | rev | grep -o -v foo)" | less"#.to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Pipeline(vec![
                 Command {
                     name: Word::new("echo", vec![]),
@@ -582,7 +609,7 @@ mod tests {
                         "I \"am\": $(whoami | rev | grep -o -v foo)",
                         vec![Expansion::Command {
                             range: 8..=39,
-                            ast: AST {
+                            ast: SyntaxTree {
                                 commands: vec![CommandType::Pipeline(vec![
                                     Command {
                                         name: Word::new("whoami", vec![]),
@@ -624,7 +651,7 @@ mod tests {
         let input = r#"CMD=exec=async 2>&1 grep ": $(whoami)" ~/.cache/ | xargs -I {} echo "$CMD: {}" >foo.log"#.to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Pipeline(vec![
                 Command {
                     name: Word::new("grep", vec![]),
@@ -640,7 +667,7 @@ mod tests {
                             ": $(whoami)",
                             vec![Expansion::Command {
                                 range: 2..=10,
-                                ast: AST {
+                                ast: SyntaxTree {
                                     commands: vec![CommandType::Single(Command {
                                         name: Word::new("whoami", vec![]),
                                         prefix: vec![],
@@ -683,7 +710,7 @@ mod tests {
         let input = r#"echo "bat: $(cat /sys/class/power_supply/BAT0/capacity)""#.to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Single(Command {
                 name: Word::new("echo", vec![]),
                 prefix: vec![],
@@ -691,7 +718,7 @@ mod tests {
                     "bat: $(cat /sys/class/power_supply/BAT0/capacity)",
                     vec![Expansion::Command {
                         range: 5..=48,
-                        ast: AST {
+                        ast: SyntaxTree {
                             commands: vec![CommandType::Single(Command {
                                 name: Word::new("cat", vec![]),
                                 prefix: vec![],
@@ -714,7 +741,7 @@ mod tests {
         let input = "ls ~ ~/ ~/foo foo~ bar/~ ./~ ~% ~baz".to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Single(Command {
                 name: Word::new("ls", vec![]),
                 prefix: vec![],
@@ -743,7 +770,7 @@ mod tests {
         let input = r#"echo "bat: $(cat "/sys/class/power_supply/BAT0/capacity")""#.to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Single(Command {
                 name: Word::new("echo", vec![]),
                 prefix: vec![],
@@ -751,7 +778,7 @@ mod tests {
                     "bat: $(cat \"/sys/class/power_supply/BAT0/capacity\")",
                     vec![Expansion::Command {
                         range: 5..=50,
-                        ast: AST {
+                        ast: SyntaxTree {
                             commands: vec![CommandType::Single(Command {
                                 name: Word::new("cat", vec![]),
                                 prefix: vec![],
@@ -774,7 +801,7 @@ mod tests {
         let input = r#"echo "foo: $(echo "$(whoami | lolcat)") yo""#.to_string();
         let ast = parse(input);
 
-        let expected = AST {
+        let expected = SyntaxTree {
             commands: vec![CommandType::Single(Command {
                 name: Word::new("echo", vec![]),
                 prefix: vec![],
@@ -782,7 +809,7 @@ mod tests {
                     r#"foo: $(echo "$(whoami | lolcat)") yo"#,
                     vec![Expansion::Command {
                         range: 5..=32,
-                        ast: AST {
+                        ast: SyntaxTree {
                             commands: vec![CommandType::Single(Command {
                                 name: Word::new("echo", vec![]),
                                 prefix: vec![],
@@ -790,7 +817,7 @@ mod tests {
                                     "$(whoami | lolcat)",
                                     vec![Expansion::Command {
                                         range: 0..=17,
-                                        ast: AST {
+                                        ast: SyntaxTree {
                                             commands: vec![CommandType::Pipeline(vec![
                                                 Command {
                                                     name: Word::new("whoami", vec![]),

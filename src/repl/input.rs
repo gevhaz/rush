@@ -7,16 +7,9 @@ use crossterm::style;
 use crossterm::terminal;
 
 use crate::config::{Colors, ABBREVIATIONS};
-use crate::engine::parser::parse_line;
-use crate::engine::Command;
 use crate::{Engine, Result};
 
 use super::RawMode;
-
-pub fn input<W: Write>(engine: &mut Engine<W>) -> Result<Option<Command>> {
-    let line = read_line(engine)?;
-    parse_line(engine, line)
-}
 
 pub fn read_line<W: Write>(engine: &mut Engine<W>) -> Result<String> {
     let _raw = RawMode::init()?;
